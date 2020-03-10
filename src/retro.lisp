@@ -9,10 +9,10 @@
   ((name  :reader   name
           :initarg  :name)
    (votes :accessor votes
-          :initform 0))
-  (:documentation "Name instances via make-instance. Vote via accessor"))
+          :initform 0)))
 
-(defmethod vote-for (user-selected-game) (incf (votes user-selected-game)))
+(defmethod vote-for (user-selected-game)
+  (incf (votes user-selected-game)))
 
 (defvar *games* '())
 
@@ -20,7 +20,8 @@
   (find name *games* :test #'string-equal
                      :key #'name))
 
-(defun game-stored? (game-name) (game-from-name game-name))
+(defun game-stored? (game-name)
+  (game-from-name game-name))
 
 (defun games ()
   "Return a list of games in *games* sorted by votes"
@@ -79,12 +80,50 @@
 
 (start-server 8080)
 
-;; push a route onto the acceptor's (or servers? )*dispatch-table*
-(push (create-prefix-dispatcher "/retro-games.htm"
-                                'retro-games)
-      *dispatch-table*)
+;; push a route onto the acceptor (or server? ) *dispatch-table*
 
-(defun retro-games ()
-  (standard-page (:title "Retro Games")
-    (:h1 "Top Retro Games")
-    (:p "We'll write the code later")))
+;; (push (create-prefix-dispatcher "/retro-games.htm"
+;;                                'retro-games)
+;;      *dispatch-table*)
+
+;; (defun retro-games ()
+;;  "Which points to this handler"
+;;  (standard-page (:title "Retro Games")
+;;    (:h1 "Top Retro Games")
+;;    (:p "We'll write the code later")))
+
+;; Hunchentoot has a macro to make the above steps easier, like this
+(define-easy-handler (retro-games :uri "/retro-games") ()
+  (standard-page
+      (:title "Top Retro Games")
+    (:h1 "Vote for your all-time favourite retro games")
+    (:p "Missing a game? Make it available to vote on"
+        (:a :href "new-game" "here"))
+    (:h2 "Current stand")
+    (:div :id "chart"
+          (:ol
+           (dolist (game (games))
+             (htm
+              (:li (:a :href (format nil "vote?name=~a"
+                                     (url-encode
+                                      (name game))) "vote!")
+                   (fmt "~A with ~d votes" (escape-string (name game))
+                        (votes game)))))))))
+
+(define-easy-handler (vote :uri "/vote") (name)
+  (when (game-stored? name)
+    (vote-for (game-from-name name)))
+  (redirect "/retro-games"))
+
+(define-easy-handler (new-game :uri "/new-game") ()
+  (standard-page (:title "Add a new game")
+    (:h1 "Add a new game to the chart")
+    (:form :action "/game-added" :method "post" :id "addform"
+           (:p "what is the name of the game?" (:br)
+               (:input :type "text" :name "name" :class "txt"))
+           (:p (:input :type "submit" :value "Add" :class "btn")))))
+
+(define-easy-handler (game-added :uri "/game-added") (name)
+  (unless (or (null name) (zerop (length name)))
+    (add-game name))
+  (redirect "/retro-games"))

@@ -3,13 +3,14 @@
 (defpackage :retro-games
   (:use :cl :cl-who :hunchentoot :parenscript))
 
-(in-package retro-games) ;; type at REPL
+(in-package retro-games)
 
 (defclass game ()
   ((name  :reader   name
           :initarg  :name)
    (votes :accessor votes
-          :initform 0)))
+          :initform 0))
+  (:documentation "Name instances via make-instance. Vote via accessor"))
 
 (defmethod vote-for (user-selected-game) (incf (votes user-selected-game)))
 
@@ -22,20 +23,24 @@
 (defun game-stored? (game-name) (game-from-name game-name))
 
 (defun games ()
+  "Return a list of games in *games* sorted by votes"
   (sort (copy-list *games*) #'> :key #'votes))
 
-(defun add-game (name) (unless (game-stored? name)
-                         (push (make-instance 'game :name name) *games*)))
+(defun add-game (name)
+  "Create a game instance using make-instance and push it onto *games*"
+  (unless (game-stored? name)
+    (push (make-instance 'game :name name) *games*)))
 
 (defmethod print-object ((object game) stream)
-  "Common Lisp allows us to customize how an object shall be printed.
-That’s done by specializing  generic function print-object for our game class:"
+  "Specializing generic function print-object for game class
+   This allows e.g. game-from-name to show us slot values."
   (print-unreadable-object (object stream :type t)
     (with-slots (name votes) object
       (format stream "name: ~s with ~d votes" name votes))))
 
 (setf (html-mode) :html5) ; output in HTML5 from now on
 
+;; Demo CL-WHO function with-html-output
 (with-html-output (*standard-output* nil :prologue t :indent t)
   (:html
    (:head
@@ -74,6 +79,7 @@ That’s done by specializing  generic function print-object for our game class:
 
 (start-server 8080)
 
+;; push a route onto the acceptor's (or servers? )*dispatch-table*
 (push (create-prefix-dispatcher "/retro-games.htm"
                                 'retro-games)
       *dispatch-table*)

@@ -50,7 +50,8 @@
     (:p "CL-WHO is really easy to use"))))
 
 (defmacro standard-page ((&key title) &body body)
-  "Creates a standard page using code supplied in params"
+  "Creates a standard page using code supplied in params.
+   We can build this up into a DSL for doing our website"
   `(with-html-output-to-string
        (*standard-output* nil :prologue t :indent t)
      (:html :lang "en"
@@ -59,10 +60,13 @@
              (:title ,title)
              (:link :type "text/css"
                     :rel "stylesheet"
-                    :href "/retro.css"))
+                    :href "/retro.css") ; we add the script tags now
+             ,(when script
+                `(:script :type "text/javascript"
+                          (str ,script))))
             (:body
              (:div :id "header"
-                   (:img :src "/logo.jpg"
+                   (:img :src "~/code/common-lisp/cl-web/logo.jpg"
                          :alt "Commodore 64"
                          :class "logo")
                    (:span :class "strapline"
@@ -92,9 +96,9 @@
 ;;    (:h1 "Top Retro Games")
 ;;    (:p "We'll write the code later")))
 
-;; Hunchentoot has a macro to make the above steps easier, like this
+;; Hunchentoot has a macro (in effect a DSL) to make the above steps easier, so.
 (define-easy-handler (retro-games :uri "/retro-games") ()
-  (standard-page
+  (standard-page ; Our DSL for web pages based on CL-WHO
       (:title "Top Retro Games")
     (:h1 "Vote for your all-time favourite retro games")
     (:p "Missing a game? Make it available to vote on"
@@ -102,7 +106,7 @@
     (:h2 "Current stand")
     (:div :id "chart"
           (:ol
-           (dolist (game (games))
+           (dolist (game (games)) ;terate over game in games
              (htm
               (:li (:a :href (format nil "vote?name=~a"
                                      (url-encode
@@ -127,3 +131,7 @@
   (unless (or (null name) (zerop (length name)))
     (add-game name))
   (redirect "/retro-games"))
+
+;;; now lets try to make the client side work a bit better - using Parenscript
+
+;; first, we need a :script bit in our standard-page macro to hold our js

@@ -49,7 +49,7 @@
    (:body
     (:p "CL-WHO is really easy to use"))))
 
-(defmacro standard-page ((&key title) &body body)
+(defmacro standard-page ((&key title script) &body body)
   "Creates a standard page using code supplied in params.
    We can build this up into a DSL for doing our website"
   `(with-html-output-to-string
@@ -61,7 +61,7 @@
              (:link :type "text/css"
                     :rel "stylesheet"
                     :href "/retro.css") ; we add the script tags now
-             ,(when script
+             ,(when script ; if script is present, adds script
                 `(:script :type "text/javascript"
                           (str ,script))))
             (:body
@@ -120,7 +120,20 @@
   (redirect "/retro-games"))
 
 (define-easy-handler (new-game :uri "/new-game") ()
-  (standard-page (:title "Add a new game")
+  (standard-page (:title "Add a new game"
+                  :script (ps ; add client side validation via script param
+                            (defvar add-form nil)
+                            (defun validate-game-name (evt)
+                              (when (= (@ add-form name value "")
+                                       (chain evt (prevent-default))
+                                       (alert "Please enter a name"))))
+                            (defun init ()
+                              (setf add-form (chain document
+                                                    (get-element-by-id "addform")))
+                              (chain add-form
+                                     (add-event-listener "submit"
+                                                         validate-game-name false)))
+                            (setf (chain window onload) init)))
     (:h1 "Add a new game to the chart")
     (:form :action "/game-added" :method "post" :id "addform"
            (:p "what is the name of the game?" (:br)

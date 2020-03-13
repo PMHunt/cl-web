@@ -1,7 +1,7 @@
-(ql:quickload '(cl-who hunchentoot parenscript))
+(ql:quickload '(cl-who hunchentoot parenscript cl-mongo))
 
 (defpackage :retro-games
-  (:use :cl :cl-who :hunchentoot :parenscript))
+  (:use :cl :cl-who :hunchentoot :parenscript :cl-mongo))
 
 (in-package retro-games)
 
@@ -9,35 +9,63 @@
   ((name  :reader   name
           :initarg  :name)
    (votes :accessor votes
+          :initarg votes ; when read from persistent storage
           :initform 0)))
+
+(defun doc->game (game-doc)
+  (make-instance 'game :name (get-element "name" game-doc)
+                       :votes (get-element "votes" game-doc)))
 
 (defmethod vote-for (user-selected-game)
   (incf (votes user-selected-game)))
 
 (defvar *games* '())
 
-(defun game-from-name (name)
-  (find name *games* :test #'string-equal
-                     :key #'name))
+;; now we add persistence
 
-(defun game-stored? (game-name)
-  (game-from-name game-name))
+;; lets use mongo - https://docs.mongodb.com/manual/tutorial/install-mongodb-on-os-x/
+
+(cl-mongo:db.use "games") ; initialise a mongodb
+
+(defparameter *game-collection* "game") ; added to support persistence
+
+(defun game-from-name (name)
+  "Look for named game in db and if found, restore to CLOS"
+  (let ((found-games (docs (db.find *game-collection*
+                                    ($ "name" name)))))
+    (when found-games
+      (doc->game (first found-games)))))
+
+(defun game-stored? (name)
+  (game-from-name name))
 
 (defun games ()
   "Return a list of games in *games* sorted by votes"
   (sort (copy-list *games*) #'> :key #'votes))
 
+(defun game->doc (game)
+  ($ ($ "name" (name game))
+     ($ "votes" (votes game))))
+
 (defun add-game (name)
-  "Create a game instance using make-instance and push it onto *games*"
-  (unless (game-stored? name)
-    (push (make-instance 'game :name name) *games*)))
+  "Create a game instance using make-instance and push it onto *games*
+   Modified to allow for storing games in mongo"
+  (let ((game (make-instance 'game :name name)))
+    (db.insert *game-collection* (game->doc game))))
+
+(defun unique-index-on (field)
+  (db.ensure-index *game-collection*
+                   ($ field 1)
+                   :unique t))
+
+(unique-index-on "name") ; execute this to ensure unique index
 
 (defmethod print-object ((object game) stream)
   "Specializing generic function print-object for game class
    This allows e.g. game-from-name to show us slot values."
   (print-unreadable-object (object stream :type t)
     (with-slots (name votes) object
-      (format stream "name: ~s with ~d votes" name votes))))
+      (format stream "name: ~s with ~d votes" name votes))))(i)
 
 (setf (html-mode) :html5) ; output in HTML5 from now on
 

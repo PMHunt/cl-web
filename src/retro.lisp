@@ -86,8 +86,9 @@
    (:body
     (:p "CL-WHO is really easy to use"))))
 
-(defmacro standard-page ((&key title) &body body)
-  "Creates a standard page using code supplied in params"
+(defmacro standard-page ((&key title script) &body body)
+  "Creates a standard page using code supplied in params.
+   We can build this up into a DSL for doing our website"
   `(with-html-output-to-string
        (*standard-output* nil :prologue t :indent t)
      (:html :lang "en"
@@ -96,10 +97,13 @@
              (:title ,title)
              (:link :type "text/css"
                     :rel "stylesheet"
-                    :href "/retro.css"))
+                    :href "/retro.css") ; we add the script tags now
+             ,(when script ; if script is present, adds script
+                `(:script :type "text/javascript"
+                          (str ,script))))
             (:body
              (:div :id "header"
-                   (:img :src "/logo.jpg"
+                   (:img :src "~/code/common-lisp/cl-web/logo.jpg"
                          :alt "Commodore 64"
                          :class "logo")
                    (:span :class "strapline"
@@ -129,9 +133,9 @@
 ;;    (:h1 "Top Retro Games")
 ;;    (:p "We'll write the code later")))
 
-;; Hunchentoot has a macro to make the above steps easier, like this
+;; Hunchentoot has a macro (in effect a DSL) to make the above steps easier, so.
 (define-easy-handler (retro-games :uri "/retro-games") ()
-  (standard-page
+  (standard-page ; Our DSL for web pages based on CL-WHO
       (:title "Top Retro Games")
     (:h1 "Vote for your all-time favourite retro games")
     (:p "Missing a game? Make it available to vote on"
@@ -139,7 +143,7 @@
     (:h2 "Current stand")
     (:div :id "chart"
           (:ol
-           (dolist (game (games))
+           (dolist (game (games)) ;terate over game in games
              (htm
               (:li (:a :href (format nil "vote?name=~a"
                                      (url-encode
@@ -153,7 +157,20 @@
   (redirect "/retro-games"))
 
 (define-easy-handler (new-game :uri "/new-game") ()
-  (standard-page (:title "Add a new game")
+  (standard-page (:title "Add a new game"
+                  :script (ps ; add client side validation via script param
+                            (defvar add-form nil)
+                            (defun validate-game-name (evt)
+                              (when (= (@ add-form name value "")
+                                       (chain evt (prevent-default))
+                                       (alert "Please enter a name"))))
+                            (defun init ()
+                              (setf add-form (chain document
+                                                    (get-element-by-id "addform")))
+                              (chain add-form
+                                     (add-event-listener "submit"
+                                                         validate-game-name false)))
+                            (setf (chain window onload) init)))
     (:h1 "Add a new game to the chart")
     (:form :action "/game-added" :method "post" :id "addform"
            (:p "what is the name of the game?" (:br)
@@ -164,3 +181,7 @@
   (unless (or (null name) (zerop (length name)))
     (add-game name))
   (redirect "/retro-games"))
+
+;;; now lets try to make the client side work a bit better - using Parenscript
+
+;; first, we need a :script bit in our standard-page macro to hold our js

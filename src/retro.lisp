@@ -16,14 +16,18 @@
   (make-instance 'game :name (get-element "name" game-doc)
                        :votes (get-element "votes" game-doc)))
 
-(defmethod vote-for (user-selected-game)
-  (incf (votes user-selected-game)))
+(defmethod vote-for (game) (incf (votes game)))
+
+(defmethod vote-for :after (user-selected-game) ; rewrite as :after method
+  ;; this allows us to separate persistence that fires when someone votes
+  (let ((game-doc (game->doc user-selected-game)))
+    (db.update *game-collection* ($ "name" (name user-selected-game))game-doc)))
 
 (defvar *games* '())
 
 ;; now we add persistence
 
-;; lets use mongo - https://docs.mongodb.com/manual/tutorial/install-mongodb-on-os-x/
+;; use mongo - https://docs.mongodb.com/manual/tutorial/install-mongodb-on-os-x/
 
 (cl-mongo:db.use "games") ; initialise a mongodb
 
@@ -40,8 +44,13 @@
   (game-from-name name))
 
 (defun games ()
-  "Return a list of games in *games* sorted by votes"
-  (sort (copy-list *games*) #'> :key #'votes))
+  "Return a list of games in games db,  sorted by votes"
+  (mapcar #'doc->game
+          (docs (iter
+                 (db.sort *game-collection*
+                          :all
+                          :field "votes"
+                          :asc nil)))))
 
 (defun game->doc (game)
   ($ ($ "name" (name game))
@@ -65,7 +74,7 @@
    This allows e.g. game-from-name to show us slot values."
   (print-unreadable-object (object stream :type t)
     (with-slots (name votes) object
-      (format stream "name: ~s with ~d votes" name votes))))(i)
+      (format stream "name: ~s with ~d votes" name votes))))
 
 (setf (html-mode) :html5) ; output in HTML5 from now on
 
@@ -98,10 +107,10 @@
              ,@body))))
 
 ;; usage example
-(standard-page
-    (:title "Retro Games")
-  (:h1 "Top Retro Games")
-  (:p "We'll write the code later..."))
+; (standard-page
+;    (:title "Retro Games")
+;  (:h1 "Top Retro Games")
+;  (:p "We'll write the code later..."))
 
 (defun start-server (port)
   (start (make-instance 'easy-acceptor :port port)))
